@@ -25,6 +25,7 @@ func listen(c *Client) {
 
 func main() {
 	client := SetupClient()
+	defer client.Disconnect()
 
 	err := client.Connect()
 	if err != nil {
@@ -32,4 +33,7 @@ func main() {
 	}
 
 	go listen(client)
+
+	for {
+	}
 }
