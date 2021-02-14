@@ -3,24 +3,36 @@ package main
 import (
 	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
+var (
+	broker   string
+	user     string
+	password string
+	port     = 1883
+)
+
 type Client struct {
-	client  mqtt.Client
-	updates chan string
+	client   mqtt.Client
+	clientID string
+	updates  chan string
 }
 
 // SetupClient creates a new MQTT connection and returns a client
 func SetupClient() *Client {
 	brokerURL := fmt.Sprintf("tcp://%s:%d", broker, port)
 
+	hostname, _ := os.Hostname()
+	id := fmt.Sprintf("go-volumio-mqtt/%s", hostname)
+
 	clientOpts := mqtt.NewClientOptions()
 	clientOpts.AddBroker(brokerURL)
 	clientOpts.SetMaxReconnectInterval(time.Second * 1)
-	clientOpts.SetClientID(clientId)
+	clientOpts.SetClientID(id)
 
 	if len(user) > 0 {
 		clientOpts.SetUsername(user)
@@ -33,8 +45,9 @@ func SetupClient() *Client {
 	u := make(chan string)
 
 	return &Client{
-		client:  c,
-		updates: u,
+		client:   c,
+		clientID: id,
+		updates:  u,
 	}
 }
 
@@ -43,9 +56,11 @@ func (c *Client) Connect() error {
 		return token.Error()
 	}
 
-	fmt.Println("+------------------+")
-	fmt.Println("|     Connected    |")
-	fmt.Println("+------------------+")
+	opts := c.client.OptionsReader()
+
+	fmt.Println("+--------------------------------------------------------------------+")
+	fmt.Printf(" Connected to %s@%s\n", opts.Username(), opts.Servers()[0].String())
+	fmt.Println("+--------------------------------------------------------------------+")
 
 	return nil
 }
@@ -78,10 +93,12 @@ type Message struct {
 
 func (c *Client) Publish(t string, m Message) error {
 	if !c.client.IsConnected() {
-		return errors.New("Not connecte")
+		return errors.New("Not connected")
 	}
 
-	token := c.client.Publish(t, 1, m.retain, []byte(m.payload))
+	topic := fmt.Sprintf("%s/%s", c.clientID, t)
+
+	token := c.client.Publish(topic, 1, m.retain, []byte(m.payload))
 	token.Wait()
 	return token.Error()
 }
